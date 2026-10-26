@@ -1,32 +1,31 @@
-from pathlib import Path
 import numpy as np
-from PIL import Image
+
+from converter import load_normal_map
 
 def main():
-    print("SSBUMP+ v0.0.1")
+    print("SSBUMP+ v0.2")
     print("--------------")
 
-    width = 2048
-    height = 2048
+    path = "output/test_normal.png"
 
-    # Crear textura RGB de prueba
-    pixels = np.zeros((height, width, 3), dtype=np.uint8)
+    normals = load_normal_map(path)
 
-    pixels[:, :, 0] = 128
-    pixels[:, :, 1] = 128
-    pixels[:, :, 2] = 255
+    print(f"Dimensiones: {normals.shape}")
+    print(f"Tipo de datos: {normals.dtype}")
 
-    image = Image.fromarray(pixels, mode="RGB")
+    # Inspeccionar el píxel central
+    height, width, _ = normals.shape
+    center = normals[height // 2, width // 2]
 
-    output_dir = Path("output")
-    output_dir.mkdir(exist_ok=True)
+    print(f"Normal central: {center}")
+    print(f"Longitud: {np.linalg.norm(center):.6f}")
 
-    outputh_path = output_dir / "test_normal.png"
-    image.save(outputh_path)
+    # Verificar que todos los vectores sean unitarios
+    lengths = np.linalg.norm(normals, axis=2)
 
-    print(f"Resolución: {width}x{height}")
-    print(f"Archivo generado: {outputh_path}")
-    print("Prueba finalizada correctamente.")
+    assert np.allclose(lengths, 1.0, atol=1e-5)
+
+    print("Validación completada correctamente.")
 
 if __name__ == "__main__":
     main()
