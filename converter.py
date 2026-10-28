@@ -7,7 +7,7 @@ def load_normal_map(path: str, flip_green: bool = False) -> np.ndarray:
     Carga un Normal Map y devuelve un array
     de vectores normales unitarios
 
-    Shape: (height, width, 3)
+    Shape: (height, width, 3)s
     Dtype: float32
     """
 
@@ -44,3 +44,40 @@ def load_normal_map(path: str, flip_green: bool = False) -> np.ndarray:
     normals = normals / lengths
 
     return normals
+
+# Vectores de referencia del shader de Source
+BUMP_BASIS = np.array(
+    [
+        [ 0.81649661,  0.0,         0.57735026],
+        [-0.40824834,  0.70710677,  0.57735026],
+        [-0.40824822, -0.70710683,  0.57735026],
+    ],
+    dtype=np.float32,
+)
+
+def normal_to_ssbump(normals: np.ndarray) -> np.ndarray:
+    """
+    Convierte normales unitarias XYZ en canales RGB SSbump
+    Entrada -> (height, width, 3), float32
+    Salida -> (height, width, 3), uint8
+    """
+    if normals.ndim != 3 or normals.shape[2] != 3:
+        raise ValueError(
+            "Se esperaba un array (height, width, 3)"
+        )
+    
+    # Producto escalar con los tres vectores base
+    dots = normals @ BUMP_BASIS.T
+
+    # Limitar resultados al intervalo [0, 1]
+    dots = np.clip(dots, 0.0, 1.0)
+
+    # Elevar al cuadrado cada contribución
+    weights = np.square(dots)
+
+    # Convertir a imagen RGB de 8 bits
+    pixels = np.rint(weights * 255.0).astype(
+        np.uint8
+    )
+
+    return pixels
