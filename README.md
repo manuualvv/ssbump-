@@ -10,7 +10,7 @@ especialmente Left 4 Dead 2.
 - Soporte para resoluciones de 2048x2048 o superiores.
 - Exportación de texturas compatibles con VTFEdit++.
 - Incorporación futura de autosombreado mediante heightmaps.
-- Interfaz gráfica para configurar la conversión.
+- Interfaz gráfica para configurar la conversión.-
 
 ## Tecnologías
 
