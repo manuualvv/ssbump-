@@ -1,4 +1,5 @@
 from pathlib import Path
+import struct
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -76,7 +77,7 @@ class CalculationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             normal_to_ssbump(np.array([[[0, 0, 1]]]), normalize_weights="False")
 
-    def test_height_map_is_validated_but_does_not_fake_shadows(self):
+    def test_height_map_without_shadow_option_preserves_conversion(self):
         normals = np.array([[[1, 0, 0], [0, 0, 1]]], dtype=np.float32)
         heights = np.array([[0, 1]], dtype=np.float32)
         for normalized in (False, True):
@@ -86,8 +87,9 @@ class CalculationTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "coincidir"):
             normal_to_ssbump(normals, height_map=np.zeros((2, 1)))
-        with self.assertRaisesRegex(NotImplementedError, "no está implementado"):
-            compute_directional_visibility(heights)
+        np.testing.assert_array_equal(
+            compute_directional_visibility(np.ones((2, 3))), np.ones((2, 3, 3))
+        )
 
     def test_invalid_heights_are_rejected(self):
         for heights in (
@@ -198,6 +200,39 @@ class ImageIOTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "extensión"):
             save_ssbump_tga(image, path.with_suffix(".png"))
         self.assertEqual(path.read_bytes(), original)
+
+    def test_tga_bytes_preserve_channels_alpha_and_orientation(self):
+        rgb = np.array([
+            [[255, 0, 0], [0, 255, 0], [0, 0, 255]],
+            [[1, 15, 42], [17, 85, 153], [255, 254, 253]],
+        ], dtype=np.uint8)
+        alpha = np.array([[0, 1, 15], [32, 42, 255]], dtype=np.uint8)
+        for pixels in (rgb, np.dstack((rgb, alpha))):
+            channels = pixels.shape[2]
+            with self.subTest(channels=channels):
+                path = self.directory / f"data_{channels}.tga"
+                image = Image.fromarray(pixels)
+                save_ssbump_tga(image, path)
+                data = path.read_bytes()
+                self.assertEqual(data[1:3], b"\x00\x02")  # True color sin paleta ni RLE.
+                width, height, bits, descriptor = struct.unpack_from("<HHBB", data, 12)
+                self.assertEqual((width, height, bits), (3, 2, channels * 8))
+                self.assertEqual(descriptor & 0x0F, 8 if channels == 4 else 0)
+                # Decodificar los bytes independientemente de Pillow comprueba
+                # orden BGR(A), origen de filas y RGB intacto incluso con alfa cero.
+                stored = np.frombuffer(
+                    data, dtype=np.uint8, count=width * height * channels,
+                    offset=18 + data[0],
+                ).reshape(height, width, channels)
+                if not descriptor & 0x20:
+                    stored = stored[::-1]
+                if descriptor & 0x10:
+                    stored = stored[:, ::-1]
+                order = [2, 1, 0, 3] if channels == 4 else [2, 1, 0]
+                np.testing.assert_array_equal(stored[:, :, order], pixels)
+                with Image.open(path) as saved:
+                    self.assertEqual(saved.mode, image.mode)
+                    np.testing.assert_array_equal(np.asarray(saved), pixels)
 
     def test_failed_export_preserves_previous_file_and_cleans_temporary_data(self):
         path = self.directory / "output.tga"
